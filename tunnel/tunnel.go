@@ -314,7 +314,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	return nil
 }
 
-func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
+func resolveMetadata(metadata *C.Metadata, pidMatch *pidRouteMatch) (proxy C.Proxy, rule C.Rule, err error) {
 	if metadata.SpecialProxy != "" {
 		var exist bool
 		proxy, exist = proxies[metadata.SpecialProxy]
@@ -398,6 +398,20 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 		helper.FindProcess = nil
 	}
 
+	// UDP 在查询会话前已确认过归属，拨号时复用该结果。
+	if pidMatch == nil {
+		matched, matchErr := matchPIDRoute(metadata)
+		if matchErr != nil {
+			return nil, nil, matchErr
+		}
+		pidMatch = &matched
+	}
+	if pidMatch.pid != 0 {
+		metadata.ProcessID = pidMatch.pid
+		proxy, err = pidMatch.outbound(metadata.NetWork)
+		return
+	}
+
 	switch mode {
 	case Direct:
 		proxy = proxies["DIRECT"]
@@ -437,7 +451,17 @@ func handleUDPConn(packet C.PacketAdapter) {
 		return
 	}
 
+	pidMatch, err := matchPIDRoute(metadata)
+	if err != nil {
+		packet.Drop()
+		log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
+		return
+	}
 	key := packet.Key()
+	if pidMatch.pid != 0 {
+		// 本地端口可被新进程复用，按进程实例和远端隔离已绑定的 UDP 会话。
+		key = fmt.Sprintf("%s|pid=%d|start=%d|dst=%s", key, pidMatch.pid, pidMatch.route.startTime, pidMatch.destination)
+	}
 	sender, loaded := natTable.GetOrCreate(key, func() C.PacketSender {
 		sender := newPacketSender()
 		if sniffingEnable && snifferDispatcher.Enable() {
@@ -457,7 +481,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 
 			_ = preHandleMetadata(metadata) // error was pre-checked
 
-			proxy, rule, err := resolveMetadata(metadata)
+			proxy, rule, err := resolveMetadata(metadata, &pidMatch)
 			if err != nil {
 				log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
 				return nil, nil, err
@@ -551,7 +575,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		}()
 	}
 
-	proxy, rule, err := resolveMetadata(metadata)
+	proxy, rule, err := resolveMetadata(metadata, nil)
 	if err != nil {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
 		return
@@ -656,11 +680,6 @@ func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
 func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, error) {
 	configMux.RLock()
 	defer configMux.RUnlock()
-
-	// rule 模式下先尝试 TUN 的 PID 绑定，再进入域名、IP 等普通规则匹配。
-	if proxy, err := matchPIDRoute(metadata); proxy != nil || err != nil {
-		return proxy, nil, err
-	}
 
 	var rematchChain []string
 	for {
