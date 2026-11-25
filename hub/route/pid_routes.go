@@ -10,6 +10,7 @@ import (
 	"github.com/metacubex/http"
 )
 
+// updatePIDRoute 通过 PUT 设置绑定，通过 DELETE 幂等删除绑定，两种操作成功时均返回 204。
 func updatePIDRoute(w http.ResponseWriter, r *http.Request) {
 	pid, err := strconv.ParseInt(chi.URLParam(r, "pid"), 10, 32)
 	if err != nil || pid <= 0 {

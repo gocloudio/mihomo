@@ -657,6 +657,7 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 	configMux.RLock()
 	defer configMux.RUnlock()
 
+	// rule 模式下先尝试 TUN 的 PID 绑定，再进入域名、IP 等普通规则匹配。
 	if proxy, err := matchPIDRoute(metadata); proxy != nil || err != nil {
 		return proxy, nil, err
 	}

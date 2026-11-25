@@ -130,6 +130,7 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 		r.Mount("/proxies", proxyRouter())
 		r.Mount("/group", groupRouter())
 		r.Mount("/rules", ruleRouter())
+		// 只有 macOS 实现了 PID 的套接字归属查询，接口沿用控制器的鉴权。
 		if runtime.GOOS == "darwin" {
 			r.Put("/pid-routes/{pid}", updatePIDRoute)
 			r.Delete("/pid-routes/{pid}", updatePIDRoute)

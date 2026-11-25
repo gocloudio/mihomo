@@ -27,6 +27,7 @@ import (
 )
 
 func TestPIDRoutesChooseConcreteNodes(t *testing.T) {
+	// 本地代理在 CONNECT 成功后返回自己的节点名，测试据此核对连接实际经过的出站。
 	nodes := make(map[string]C.Proxy)
 	for _, name := range []string{"node-a", "node-b", "fallback"} {
 		nodeName := name
@@ -81,6 +82,7 @@ func TestPIDRoutesChooseConcreteNodes(t *testing.T) {
 		require.Equal(t, status, rec.Code, rec.Body.String())
 	}
 
+	// 用同一路径的测试二进制启动两个进程，验证不同 PID 可以命中不同节点。
 	start := func() (int, func(*sing.ListenerHandler, string)) {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestPIDRouteClient$", "--", "pid-route-client")
 		stdin, err := cmd.StdinPipe()
