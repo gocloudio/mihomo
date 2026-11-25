@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -129,6 +130,10 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 		r.Mount("/proxies", proxyRouter())
 		r.Mount("/group", groupRouter())
 		r.Mount("/rules", ruleRouter())
+		if runtime.GOOS == "darwin" {
+			r.Put("/pid-routes/{pid}", updatePIDRoute)
+			r.Delete("/pid-routes/{pid}", updatePIDRoute)
+		}
 		r.Mount("/connections", connectionRouter())
 		r.Mount("/providers/proxies", proxyProviderRouter())
 		r.Mount("/providers/rules", ruleProviderRouter())

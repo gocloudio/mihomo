@@ -634,6 +634,8 @@ func logMetadataErr(metadata *C.Metadata, rule C.Rule, proxy C.ProxyAdapter, err
 
 func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
 	switch {
+	case metadata.ProcessID != 0:
+		log.Infoln("[%s] %s --> %s match PID(%d) using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), metadata.ProcessID, remoteConn.Chains().String())
 	case metadata.SpecialProxy != "":
 		log.Infoln("[%s] %s --> %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().String())
 	case rule != nil:
@@ -654,6 +656,10 @@ func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
 func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, error) {
 	configMux.RLock()
 	defer configMux.RUnlock()
+
+	if proxy, err := matchPIDRoute(metadata); proxy != nil || err != nil {
+		return proxy, nil, err
+	}
 
 	var rematchChain []string
 	for {
